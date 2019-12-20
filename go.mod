@@ -10,7 +10,7 @@ require (
 	github.com/go-chi/render v1.0.1
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gorilla/websocket v1.4.1
-	github.com/miekg/dns v1.1.22
+	github.com/miekg/dns v1.1.26
 	github.com/oschwald/geoip2-golang v1.3.0
 	github.com/oschwald/maxminddb-golang v1.5.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
