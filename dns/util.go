@@ -11,7 +11,6 @@ import (
 	"github.com/Dreamacro/clash/log"
 
 	D "github.com/miekg/dns"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -46,8 +45,8 @@ func (e *EnhancedMode) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 // MarshalYAML serialize EnhancedMode with yaml
-func (e EnhancedMode) MarshalYAML() ([]byte, error) {
-	return yaml.Marshal(e.String())
+func (e EnhancedMode) MarshalYAML() (interface{}, error) {
+	return e.String(), nil
 }
 
 // UnmarshalJSON unserialize EnhancedMode with json
@@ -80,21 +79,21 @@ func (e EnhancedMode) String() string {
 	}
 }
 
-func putMsgToCache(c *cache.Cache, key string, msg *D.Msg) {
-	var ttl time.Duration
+func putMsgToCache(c *cache.LruCache, key string, msg *D.Msg) {
+	var ttl uint32
 	switch {
 	case len(msg.Answer) != 0:
-		ttl = time.Duration(msg.Answer[0].Header().Ttl) * time.Second
+		ttl = msg.Answer[0].Header().Ttl
 	case len(msg.Ns) != 0:
-		ttl = time.Duration(msg.Ns[0].Header().Ttl) * time.Second
+		ttl = msg.Ns[0].Header().Ttl
 	case len(msg.Extra) != 0:
-		ttl = time.Duration(msg.Extra[0].Header().Ttl) * time.Second
+		ttl = msg.Extra[0].Header().Ttl
 	default:
-		log.Debugln("[DNS] response msg error: %#v", msg)
+		log.Debugln("[DNS] response msg empty: %#v", msg)
 		return
 	}
 
-	c.Put(key, msg.Copy(), ttl)
+	c.SetWithExpire(key, msg.Copy(), time.Now().Add(time.Second*time.Duration(ttl)))
 }
 
 func setMsgTTL(msg *D.Msg, ttl uint32) {
@@ -112,10 +111,7 @@ func setMsgTTL(msg *D.Msg, ttl uint32) {
 }
 
 func isIPRequest(q D.Question) bool {
-	if q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA) {
-		return true
-	}
-	return false
+	return q.Qclass == D.ClassINET && (q.Qtype == D.TypeA || q.Qtype == D.TypeAAAA)
 }
 
 func transform(servers []NameServer, resolver *Resolver) []dnsClient {
@@ -134,6 +130,7 @@ func transform(servers []NameServer, resolver *Resolver) []dnsClient {
 					ClientSessionCache: globalSessionCache,
 					// alpn identifier, see https://tools.ietf.org/html/draft-hoffman-dprive-dns-tls-alpn-00#page-6
 					NextProtos: []string{"dns"},
+					ServerName: host,
 				},
 				UDPSize: 4096,
 				Timeout: 5 * time.Second,

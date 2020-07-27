@@ -28,9 +28,6 @@ var (
 	configMux    sync.RWMutex
 	enhancedMode *dns.Resolver
 
-	// experimental features
-	ignoreResolveFail bool
-
 	// Outbound Rule
 	mode = Rule
 
@@ -79,13 +76,6 @@ func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]provid
 	configMux.Lock()
 	proxies = newProxies
 	providers = newProviders
-	configMux.Unlock()
-}
-
-// UpdateExperimental handle update experimental config
-func UpdateExperimental(value bool) {
-	configMux.Lock()
-	ignoreResolveFail = value
 	configMux.Unlock()
 }
 
@@ -147,6 +137,9 @@ func preHandleMetadata(metadata *C.Metadata) error {
 			metadata.AddrType = C.AtypDomainName
 			if enhancedMode.FakeIPEnabled() {
 				metadata.DstIP = nil
+			} else if node := resolver.DefaultHosts.Search(host); node != nil {
+				// redir-host should lookup the hosts
+				metadata.DstIP = node.Data.(net.IP)
 			}
 		} else if enhancedMode.IsFakeIP(metadata.DstIP) {
 			return fmt.Errorf("fake DNS record %s missing", metadata.DstIP)
@@ -180,6 +173,12 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 	if !metadata.Valid() {
 		log.Warnln("[Metadata] not valid: %#v", metadata)
 		return
+	}
+
+	// make a fAddr if requset ip is fakeip
+	var fAddr net.Addr
+	if enhancedMode != nil && enhancedMode.IsFakeIP(metadata.DstIP) {
+		fAddr = metadata.UDPAddr()
 	}
 
 	if err := preHandleMetadata(metadata); err != nil {
@@ -231,7 +230,7 @@ func handleUDPConn(packet *inbound.PacketAdapter) {
 			natTable.Set(key, pc)
 			natTable.Delete(lockKey)
 			wg.Done()
-			go handleUDPToLocal(packet.UDPPacket, pc, key)
+			go handleUDPToLocal(packet.UDPPacket, pc, key, fAddr)
 		}
 
 		wg.Wait()
@@ -309,9 +308,6 @@ func match(metadata *C.Metadata) (C.Proxy, C.Rule, error) {
 		if !resolved && shouldResolveIP(rule, metadata) {
 			ip, err := resolver.ResolveIP(metadata.Host)
 			if err != nil {
-				if !ignoreResolveFail {
-					return nil, nil, fmt.Errorf("[DNS] resolve %s error: %s", metadata.Host, err.Error())
-				}
 				log.Debugln("[DNS] resolve %s error: %s", metadata.Host, err.Error())
 			} else {
 				log.Debugln("[DNS] %s --> %s", metadata.Host, ip.String())

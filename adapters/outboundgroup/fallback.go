@@ -56,6 +56,11 @@ func (f *Fallback) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (f *Fallback) Unwrap(metadata *C.Metadata) C.Proxy {
+	proxy := f.findAliveProxy()
+	return proxy
+}
+
 func (f *Fallback) proxies() []C.Proxy {
 	elm, _, _ := f.single.Do(func() (interface{}, error) {
 		return getProvidersProxies(f.providers), nil
@@ -77,7 +82,7 @@ func (f *Fallback) findAliveProxy() C.Proxy {
 
 func NewFallback(name string, providers []provider.ProxyProvider) *Fallback {
 	return &Fallback{
-		Base:      outbound.NewBase(name, C.Fallback, false),
+		Base:      outbound.NewBase(name, "", C.Fallback, false),
 		single:    singledo.NewSingle(defaultGetProxiesDuration),
 		providers: providers,
 	}
