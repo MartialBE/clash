@@ -12,7 +12,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/miekg/dns v1.1.29
 	github.com/oschwald/geoip2-golang v1.4.0
-	github.com/sirupsen/logrus v1.6.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
